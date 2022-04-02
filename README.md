@@ -10,5 +10,5 @@ The EDNS0, which is a specification for expanding the size of several parameters
 # Run
 ```
 $ cd src/DNS_Amplification_Attack/
-$ ./dns_amp <Victim_IP> <UDP_Source_Port> <DNS_Server_IP>
+$ sudo ./dns_amp <Victim_IP> <UDP_Source_Port> <DNS_Server_IP>
 ```

